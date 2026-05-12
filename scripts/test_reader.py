@@ -46,5 +46,48 @@ def test_reader():
 
     print("\n[ok] Reader tests complete.")
 
+def test_indexes():
+    """
+    Uses explain() to verify MongoDB is using indexes, not doing collection scans.
+    COLLSCAN = bad (no index). IXSCAN = good (index used).
+    """
+    from db.connection import get_nodes_collection, get_edges_collection
+
+    print("\n" + "=" * 50)
+    print("TEST — Index usage verification")
+    print("=" * 50)
+
+    nodes = get_nodes_collection()
+    edges = get_edges_collection()
+
+    # Check nodes type query
+    plan = nodes.find({"type": "Task"}).explain()
+    stage = plan["queryPlanner"]["winningPlan"].get("stage", "")
+    input_stage = plan["queryPlanner"]["winningPlan"].get("inputStage", {}).get("stage", "")
+    actual_stage = input_stage or stage
+    status = "✅ IXSCAN" if "IXSCAN" in actual_stage else "❌ COLLSCAN"
+    print(f"nodes.find(type=Task)        → {status}")
+
+    # Check edges from_id query
+    plan = edges.find({"from_id": "any-id"}).explain()
+    stage = plan["queryPlanner"]["winningPlan"].get("stage", "")
+    input_stage = plan["queryPlanner"]["winningPlan"].get("inputStage", {}).get("stage", "")
+    actual_stage = input_stage or stage
+    status = "✅ IXSCAN" if "IXSCAN" in actual_stage else "❌ COLLSCAN"
+    print(f"edges.find(from_id=...)      → {status}")
+
+    # Check edges compound query
+    plan = edges.find({"from_id": "any-id", "relation": "LEARNED"}).explain()
+    stage = plan["queryPlanner"]["winningPlan"].get("stage", "")
+    input_stage = plan["queryPlanner"]["winningPlan"].get("inputStage", {}).get("stage", "")
+    actual_stage = input_stage or stage
+    status = "✅ IXSCAN" if "IXSCAN" in actual_stage else "❌ COLLSCAN"
+    print(f"edges.find(from+relation)    → {status}")
+
+# add this to the bottom of the file
+if __name__ == "__main__":
+    test_reader()
+    test_indexes()
+
 if __name__ == "__main__":
     test_reader()

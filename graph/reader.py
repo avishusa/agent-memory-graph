@@ -63,21 +63,32 @@ def get_task_memory(task_id: str) -> dict:
 def search_facts(keyword: str) -> list[dict]:
     """
     Search for Fact nodes whose label or content contains the keyword.
-    Uses MongoDB text-style regex search.
-    Case-insensitive.
+    Uses MongoDB $text search which leverages the text index — much faster
+    than regex on large collections.
+    Falls back to regex if text index isn't set up yet.
     """
     nodes = get_nodes_collection()
 
-    results = list(nodes.find({
-        "type": "Fact",
-        "$or": [
-            {"label": {"$regex": keyword, "$options": "i"}},
-            {"properties.content": {"$regex": keyword, "$options": "i"}}
-        ]
-    }))
+    try:
+        # $text uses the TEXT index — fast and case-insensitive by default
+        results = list(nodes.find({
+            "type": "Fact",
+            "$text": {"$search": keyword}
+        }))
+        print(f"[reader] Found {len(results)} facts matching '{keyword}'")
+        return results
 
-    print(f"[reader] Found {len(results)} facts matching '{keyword}'")
-    return results
+    except Exception:
+        # Fallback to regex if text index doesn't exist
+        results = list(nodes.find({
+            "type": "Fact",
+            "$or": [
+                {"label": {"$regex": keyword, "$options": "i"}},
+                {"properties.content": {"$regex": keyword, "$options": "i"}}
+            ]
+        }))
+        print(f"[reader] Found {len(results)} facts matching '{keyword}' (regex fallback)")
+        return results
 
 
 # ─── Related task search ───────────────────────────────────────
