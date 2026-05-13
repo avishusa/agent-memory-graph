@@ -3,9 +3,10 @@ from pymongo.collection import Collection
 from db.connection import get_nodes_collection, get_edges_collection
 from graph.schema import (
     make_node, make_edge,
-    NODE_TASK, NODE_TOOL, NODE_FACT, NODE_DECISION,
+    NODE_TASK, NODE_TOOL, NODE_FACT, NODE_DECISION, NODE_AGENT_ROLE,
     REL_USED_TOOL, REL_LEARNED, REL_MADE_DECISION,
     REL_RELATED_TO, REL_DEPENDS_ON,
+    REL_PRODUCED_BY, REL_REVIEWS,
 )
 
 
@@ -82,6 +83,33 @@ def save_decision(label: str, reasoning: str) -> str:
     )
     nodes.insert_one(node)
     print(f"[writer] Decision saved: '{label}' ({node['_id']})")
+    return node["_id"]
+
+
+def save_agent_role(label: str, description: str) -> str:
+    """
+    Creates an AgentRole node if one with this label doesn't exist (upsert).
+    AgentRoles are singletons — there should be exactly one 'Researcher',
+    one 'Critic', one 'Writer' for the entire lifetime of the system.
+    All PRODUCED_BY edges from Facts/Decisions point to these singleton nodes.
+
+    Returns the agent role node's _id (existing or newly created).
+    """
+    nodes = get_nodes_collection()
+
+    # Check if this role already exists
+    existing = nodes.find_one({"type": NODE_AGENT_ROLE, "label": label})
+    if existing:
+        print(f"[writer] AgentRole already exists, reusing: '{label}' ({existing['_id']})")
+        return existing["_id"]
+
+    node = make_node(
+        node_type=NODE_AGENT_ROLE,
+        label=label,
+        properties={"description": description}
+    )
+    nodes.insert_one(node)
+    print(f"[writer] AgentRole saved: '{label}' ({node['_id']})")
     return node["_id"]
 
 
